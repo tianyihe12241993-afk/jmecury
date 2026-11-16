@@ -5,30 +5,37 @@ the published rubric and the prompt cannot drift apart.
 
 Each pair is judged twice with the order swapped. A win counts only if both orders agree;
 anything else is a tie. A site is flagged for invented claims only if its invented-claims
-list is non-empty in both orders. A reply that does not match the output format exactly
-counts as a tie with no flags.
+list is non-empty in both orders. A reply that does not match the output format counts as a
+tie with no flags. The reply may be the bare JSON object or that object inside exactly one
+fenced ```json block; anything else around it is a format failure.
 
-``OpenAIJudge`` talks to any OpenAI-compatible ``/chat/completions`` endpoint configured by
-JM_JUDGE_BASE_URL, JM_JUDGE_MODEL and JM_JUDGE_API_KEY. The key is never logged or stored.
-``FakeJudge`` returns scripted replies for tests.
+``OpenRouterJudge`` calls the model named by ``JM_JUDGE_MODEL`` through ``jmercury.llm``
+(OpenRouter, key in ``OPENROUTER_API_KEY``) at temperature 0. There is deliberately no default
+model: it will be chosen on testnet by measured self-agreement. ``FakeJudge`` returns scripted
+replies for tests.
+
+Images per call: for each site, the phone first screen (390 x 844), the phone full page in up to
+three parts of at most 390 x 1560 (``render.FULL_PART_HEIGHT``; the page is capped at 4000 px) and
+the desktop first screen (1280 x 800): 6 to 10 images per call.
 """
 
 from __future__ import annotations
 
-import base64
 import json
 import os
-import urllib.error
-import urllib.request
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional, Protocol
 
-RUBRIC_PATH = Path(__file__).resolve().parent.parent / "docs" / "RUBRIC.md"
+from ..llm import LLMClient, LLMConfigError, Usage, image_part, text_part
+
+RUBRIC_PATH = Path(__file__).resolve().parents[2] / "docs" / "RUBRIC.md"
 CRITERIA = ("clarity", "facts", "fit", "phone", "professional")
 CHOICES = ("A", "B", "tie")
 MAX_TEXT_CHARS = 12000
-ENV_VARS = ("JM_JUDGE_BASE_URL", "JM_JUDGE_MODEL", "JM_JUDGE_API_KEY")
+ENV_MODEL = "JM_JUDGE_MODEL"
+JUDGE_MAX_TOKENS = 1500
 
 
 def load_rubric() -> str:
@@ -37,7 +44,7 @@ def load_rubric() -> str:
 
 SYSTEM_TEMPLATE = """You are the judge for the J Mercury subnet. You compare two websites, Site A and Site B, built for \
 the same local-business brief. Apply the rubric below exactly. Reply with ONLY the JSON object described in its \
-"Output format" section: no code fences, no text before or after it.
+"Output format" section: no text before or after it.
 
 --- RUBRIC (docs/RUBRIC.md, verbatim) ---
 {rubric}
@@ -52,38 +59,42 @@ class SiteView:
     mobile_first_png: bytes
     mobile_full_png: bytes
     desktop_first_png: bytes
+    # The full phone page in parts of at most 390 x 1560; empty means: send ``mobile_full_png`` whole.
+    mobile_full_parts: list[bytes] = field(default_factory=list)
 
     @classmethod
     def from_paths(cls, visible_text: str, screenshots: dict[str, str]) -> "SiteView":
+        part_keys = sorted((k for k in screenshots if re.fullmatch(r"mobile_full_\d+", k)), key=lambda k: int(k.rsplit("_", 1)[1]))
         return cls(
             visible_text=visible_text,
             mobile_first_png=Path(screenshots["mobile_first"]).read_bytes(),
             mobile_full_png=Path(screenshots["mobile_full"]).read_bytes(),
             desktop_first_png=Path(screenshots["desktop_first"]).read_bytes(),
+            mobile_full_parts=[Path(screenshots[k]).read_bytes() for k in part_keys],
         )
 
-
-def _img(png: bytes) -> dict:
-    return {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(png).decode("ascii")}}
+    def full_page_images(self) -> list[bytes]:
+        return list(self.mobile_full_parts) or [self.mobile_full_png]
 
 
 def build_messages(brief_json: str, a: SiteView, b: SiteView, rubric: Optional[str] = None) -> list[dict]:
     rubric = rubric if rubric is not None else load_rubric()
-    content: list[dict] = [{"type": "text", "text": "BRIEF (JSON):\n" + brief_json}]
+    content: list[dict] = [text_part("BRIEF (JSON):\n" + brief_json)]
     for label, site in (("A", a), ("B", b)):
         text = site.visible_text
         if len(text) > MAX_TEXT_CHARS:
             text = text[:MAX_TEXT_CHARS] + "\n[... visible text truncated ...]"
+        content += [text_part(f"SITE {label}: phone first screen (390 x 844)"), image_part(site.mobile_first_png)]
+        parts = site.full_page_images()
+        for i, png in enumerate(parts, start=1):
+            suffix = f", part {i} of {len(parts)}, top to bottom" if len(parts) > 1 else ""
+            content += [text_part(f"SITE {label}: phone full page{suffix}"), image_part(png)]
         content += [
-            {"type": "text", "text": f"SITE {label}: phone first screen (390 x 844)"},
-            _img(site.mobile_first_png),
-            {"type": "text", "text": f"SITE {label}: phone full page"},
-            _img(site.mobile_full_png),
-            {"type": "text", "text": f"SITE {label}: desktop first screen (1280 x 800)"},
-            _img(site.desktop_first_png),
-            {"type": "text", "text": f"SITE {label}: visible text\n<<<\n{text}\n>>>"},
+            text_part(f"SITE {label}: desktop first screen (1280 x 800)"),
+            image_part(site.desktop_first_png),
+            text_part(f"SITE {label}: visible text\n<<<\n{text}\n>>>"),
         ]
-    content.append({"type": "text", "text": "Compare Site A and Site B now. Reply with the JSON object only."})
+    content.append(text_part("Compare Site A and Site B now. Reply with the JSON object only."))
     return [
         {"role": "system", "content": SYSTEM_TEMPLATE.format(rubric=rubric)},
         {"role": "user", "content": content},
@@ -111,8 +122,19 @@ class Verdict:
                 "invented_claims": self.invented, "reason": self.reason, "error": self.error}
 
 
+_FENCED = re.compile(r"\A\s*```json[ \t]*\r?\n(.*?)\r?\n[ \t]*```\s*\Z", re.S)
+
+
+def unwrap_reply(raw: str) -> str:
+    """The bare JSON text: the reply itself, or the inside of exactly one ```json fence that is the whole reply."""
+    m = _FENCED.match(raw)
+    if m and "```" not in m.group(1):
+        return m.group(1)
+    return raw
+
+
 def parse_reply(raw: Optional[str]) -> Verdict:
-    """Strict: the whole reply must be one JSON object of exactly the rubric's shape."""
+    """Strict: the reply must be one JSON object of exactly the rubric's shape, bare or in one ```json fence."""
 
     def bad(msg: str) -> Verdict:
         return Verdict(valid=False, error=msg)
@@ -120,7 +142,7 @@ def parse_reply(raw: Optional[str]) -> Verdict:
     if not isinstance(raw, str):
         return bad("no reply text")
     try:
-        obj = json.loads(raw.strip())
+        obj = json.loads(unwrap_reply(raw).strip())
     except (json.JSONDecodeError, ValueError) as exc:
         return bad(f"not JSON: {exc}")
     if not isinstance(obj, dict):
@@ -160,45 +182,44 @@ class JudgeConfigError(RuntimeError):
     pass
 
 
-class OpenAIJudge:
-    """OpenAI-compatible /chat/completions client. Reads its settings from the environment."""
+MISSING_MODEL_MESSAGE = (
+    f"{ENV_MODEL} is not set. There is no default judge model yet: it will be chosen on testnet by measuring how "
+    "often a model agrees with itself on repeated, identical comparisons (docs/DESIGN.md section 3.3). Set "
+    f"{ENV_MODEL} to an OpenRouter model slug to run the judge"
+)
 
-    def __init__(self, timeout: float = 180.0, temperature: float = 0.0):
-        missing = [v for v in ENV_VARS if not os.environ.get(v)]
-        if missing:
-            raise JudgeConfigError("the judge needs these environment variables: " + ", ".join(missing))
-        self.base_url = os.environ["JM_JUDGE_BASE_URL"].rstrip("/")
-        self.model = os.environ["JM_JUDGE_MODEL"]
-        self._key = os.environ["JM_JUDGE_API_KEY"]
+
+class OpenRouterJudge:
+    """The validator's judge: one OpenRouter chat call per order, temperature 0."""
+
+    def __init__(self, client: Optional[LLMClient] = None, model: Optional[str] = None, *, timeout: float = 180.0,
+                 seed: Optional[int] = 0, max_tokens: int = JUDGE_MAX_TOKENS):
+        self.model = model or os.environ.get(ENV_MODEL, "").strip()
+        if not self.model:
+            raise JudgeConfigError(MISSING_MODEL_MESSAGE)
+        try:
+            self.client = client or LLMClient(timeout=timeout)
+        except LLMConfigError as exc:
+            raise JudgeConfigError(str(exc)) from None
         self.timeout = timeout
-        self.temperature = temperature
+        self.seed = seed
+        self.max_tokens = max_tokens
+        self.usage = Usage()
+        self.calls: list[dict] = []  # per call: requested/answering model, provider, usage (no content)
 
     def __repr__(self) -> str:  # never show the key
-        return f"OpenAIJudge(base_url={self.base_url!r}, model={self.model!r})"
+        return f"OpenRouterJudge(model={self.model!r})"
 
     def compare(self, brief_json: str, a: SiteView, b: SiteView) -> str:
-        body = json.dumps({
-            "model": self.model,
-            "temperature": self.temperature,
-            "messages": build_messages(brief_json, a, b),
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            self.base_url + "/chat/completions",
-            data=body,
-            headers={"Content-Type": "application/json", "Authorization": "Bearer " + self._key},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            raise RuntimeError(f"judge endpoint returned HTTP {exc.code}") from None
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            raise RuntimeError(f"judge endpoint unreachable: {type(exc).__name__}") from None
-        try:
-            return data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError):
-            raise RuntimeError("judge endpoint reply has no choices[0].message.content") from None
+        res = self.client.chat(self.model, build_messages(brief_json, a, b), temperature=0.0, seed=self.seed,
+                               max_tokens=self.max_tokens, timeout=self.timeout)
+        self.usage = self.usage.add(res.usage)
+        self.calls.append(res.as_record())
+        return res.text
+
+    def record(self) -> dict:
+        return {"model": self.model, "calls": len(self.calls), "usage": self.usage.as_dict(),
+                "answered_by": sorted({f"{c['model']} via {c['provider']}" for c in self.calls})}
 
 
 class FakeJudge:

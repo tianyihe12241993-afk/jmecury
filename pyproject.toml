@@ -4,29 +4,37 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jmercury"
-version = "0.1.0"
-description = "J Mercury subnet: local scorer for phone-first local-business websites"
+version = "0.2.0"
+description = "J Mercury subnet: validator and reference miner for phone-first local-business websites"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.6",
-    "html5lib>=1.1",
-    # 1.63.0 uses Chromium build 1243; pin so validators render with the same browser.
-    "playwright==1.63.0",
-    # Only jmercury/protocol.py imports bittensor.
+    # btauth/1 request and response signing (jmercury/protocol.py), wallets.
     "bittensor==11.3.2",
+    # HTTP (OpenRouter, miner server, validator client) uses the standard library only.
 ]
 
 [project.optional-dependencies]
+validator = [
+    # 1.63.0 uses Chromium build 1243; pin so validators render with the same browser.
+    "playwright==1.63.0",
+    # Gate 2 parses HTML the way a browser does.
+    "html5lib>=1.1",
+]
+# The reference miner needs nothing beyond the base install: its server is http.server.ThreadingHTTPServer
+# (one thread per request suits blocking LLM calls at a few requests per round) and its LLM client is urllib.
+miner = []
 dev = ["pytest>=8"]
 
 [tool.setuptools]
-packages = ["jmercury"]
+packages = ["jmercury", "jmercury.validator", "jmercury.miner"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
     "browser: needs Playwright Chromium",
     "lighthouse: needs node and the local Lighthouse install",
+    "e2e: starts local HTTP servers on 127.0.0.1",
 ]

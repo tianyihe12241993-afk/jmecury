@@ -150,24 +150,39 @@ proportional to it. Miners not sampled in a round keep their average.
 ### Transport
 
 bittensor 11 has no axon, dendrite or synapse. Miners run their own small HTTP endpoint and publish it on chain with
-the `ServeAxon` intent; the validator POSTs the brief as JSON (`jmercury/protocol.py`), and every request and answer is
-signed and checked with `bittensor.http_auth`.
+the `ServeAxon` intent. The validator POSTs a `SiteTask` (the brief as JSON, `jmercury/protocol.py`) to
+`/v1/site-task`, signed with `bittensor.http_auth` (btauth/1): the signature covers the method, path, body hash, a
+nanosecond nonce, the validator hotkey and the receiving miner hotkey. The miner checks the receiver binding,
+freshness (10 s), the signature and replay, and answers only validators it accepts. Its answer (the brief echoed
+back, `bundle_b64`, `miner_version`) is signed by the miner hotkey for that validator and bound to the request's
+nonce, so the validator can prove which hotkey sent which bundle and an old answer cannot be replayed to a new
+request. A validator waits at most 180 s for the whole exchange and reads at most the size a 2 MB bundle can have;
+a missing, late, oversized, unsigned or wrongly signed answer scores 0 for that round. Validator side:
+`jmercury/validator/client.py`; reference miner side: `jmercury/miner/server.py`.
 
 ## 6. Running the scorer without the chain
 
-The repository ships a local scorer, so miners can test before mining:
+The repository ships the validator's scorer, so miners can test before mining:
 
 ```
-python -m jmercury.score --brief brief.json --site ./my-site/            # gates + measured
-python -m jmercury.score --brief brief.json --site ./a/ --vs ./b/ --judge # plus one pairwise judgement
-python -m jmercury.brief --seed 42 > brief.json                         # a sample brief
+python -m jmercury.brief --seed 42 > brief.json                                    # a sample brief
+python -m jmercury.validator.score --brief brief.json --site ./my-site/            # gates + measured
+python -m jmercury.validator.score --brief brief.json --site ./a/ --vs ./b/ --judge # plus one pairwise judgement
+python -m jmercury.miner.generate --brief brief.json --out ./my-site/              # the reference miner
 ```
 
 ## 7. What validators need
 
 Python 3.10+, Chromium (via Playwright) with its system libraries and fonts, Node.js ≥ 22.19 with Lighthouse 13.6
-(`npm ci`), Docker recommended for isolated rendering, and an API key for the judge model. No GPU. Scoring one site
-(render + 3 Lighthouse runs) takes about 30 s, almost all of it Lighthouse.
+(`npm ci`), Docker recommended for isolated rendering, and an [OpenRouter](https://openrouter.ai/) API key for the
+judge (`OPENROUTER_API_KEY`). No GPU. Scoring one site (render + 3 Lighthouse runs) takes about 30 s, almost all of
+it Lighthouse.
+
+The judge goes through OpenRouter's OpenAI-compatible chat API, so every validator can reach the same model under
+the same slug; the slug is set in `JM_JUDGE_MODEL` and has no default until it is chosen (section 3.3). Calls use
+temperature 0. OpenRouter may route one model slug to different upstream providers; the round record lists which
+model and provider pairs answered the round's calls. The reference miner uses OpenRouter too, but any way of producing
+the bundle is allowed: the validator only sees the bundle.
 
 ## 8. Known limits of v1
 

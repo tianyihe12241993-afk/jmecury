@@ -12,6 +12,7 @@ import argparse
 import json
 import random
 import re
+import unicodedata
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
@@ -97,6 +98,40 @@ class Brief(BaseModel):
 
     def to_json(self, indent: Optional[int] = 2) -> str:
         return json.dumps(self.model_dump(mode="json"), indent=indent, ensure_ascii=False)
+
+
+# --------------------------------------------------------------------------------------
+# Fact matching helpers, shared by the validator gates and the miner's self-check
+# --------------------------------------------------------------------------------------
+
+PHONE_TOKEN = re.compile(r"(?<!\d)(?:\+?1[\s.\-]?)?(?:\(\d{3}\)|\d{3})[\s.\-]?\d{3}[\s.\-]?\d{4}(?!\d)")
+
+
+def phone_digits(s: str) -> str:
+    """The ten national digits of a US phone number (a leading country code 1 is dropped)."""
+    d = re.sub(r"\D", "", s)
+    if len(d) == 11 and d.startswith("1"):
+        d = d[1:]
+    return d
+
+
+def time_pattern(hhmm: str) -> re.Pattern:
+    """Regex matching one brief time in any accepted format: 8:00 AM, 8am, 8 a.m., 08:00."""
+    h, m = int(hhmm[:2]), int(hhmm[3:])
+    h12 = h % 12 or 12
+    mer = "a" if h < 12 else "p"
+    mer_re = r"\s?(?:a\.?\s?m\.?)(?![a-z])" if mer == "a" else r"\s?(?:p\.?\s?m\.?)(?![a-z])"
+    alts = [rf"(?<![\d:]){h12}:{m:02d}{mer_re}"]
+    if m == 0:
+        alts.append(rf"(?<![\d:]){h12}{mer_re}")
+    # 24-hour clock, not followed by a meridiem (08:00, 8:00, 17:00)
+    h24 = rf"0?{h}" if h < 10 else f"{h}"
+    alts.append(rf"(?<![\d:]){h24}:{m:02d}(?!\d)(?!\s?[ap]\.?\s?m\b)")
+    return re.compile("|".join(f"(?:{a})" for a in alts), re.I)
+
+
+def normalise_text(s: str) -> str:
+    return " ".join(unicodedata.normalize("NFKC", s).casefold().split())
 
 
 # --------------------------------------------------------------------------------------

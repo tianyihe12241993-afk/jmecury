@@ -56,7 +56,7 @@ def _browser_ok() -> tuple[bool, str]:
     try:
         from playwright.sync_api import sync_playwright
 
-        from jmercury.render import browser_env
+        from jmercury.validator.render import browser_env
 
         with sync_playwright() as p:
             b = p.chromium.launch(env=browser_env())
@@ -79,7 +79,7 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.skip(reason=_BROWSER[1]))
     for item in items:
         if item.get_closest_marker("lighthouse"):
-            from jmercury.measure import MeasureUnavailable, check_available
+            from jmercury.validator.measure import MeasureUnavailable, check_available
 
             try:
                 check_available()

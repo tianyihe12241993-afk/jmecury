@@ -3,10 +3,10 @@ import struct
 import pytest
 
 from jmercury.bundle import unpack
-from jmercury.gates import gate_facts
-from jmercury.render import render_site
+from jmercury.validator.gates import gate_facts
+from jmercury.validator.render import render_site
 
-from .conftest import default_jsonld, facts_html, site_b64
+from ..conftest import default_jsonld, facts_html, site_b64
 
 pytestmark = pytest.mark.browser
 

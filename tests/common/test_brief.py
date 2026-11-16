@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from jmercury.brief import CITIES, DAYS, SECTIONS, TRADES, Brief, generate
 
-from .conftest import EXAMPLE_DIR, REPO
+from ..conftest import EXAMPLE_DIR, REPO
 
 AREA = {(c, s): a for c, s, a, _ in CITIES}
 

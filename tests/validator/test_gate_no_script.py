@@ -1,9 +1,9 @@
 import pytest
 
 from jmercury.bundle import unpack
-from jmercury.gates import gate_no_script
+from jmercury.validator.gates import gate_no_script
 
-from .conftest import zip_b64
+from ..conftest import zip_b64
 
 
 def g2(index_html: str, extra=()):
@@ -194,7 +194,7 @@ def test_example_site_passes(example_html):
 
     from jmercury.bundle import pack_dir
 
-    from .conftest import EXAMPLE_DIR
+    from ..conftest import EXAMPLE_DIR
 
     r = gate_no_script(unpack(pack_dir(Path(EXAMPLE_DIR) / "site")))
     assert r.passed, r.reasons

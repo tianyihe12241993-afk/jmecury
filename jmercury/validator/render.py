@@ -10,7 +10,9 @@ Outputs (``RenderResult``):
 - ``no_hscroll``: the page does not scroll horizontally at 390 px;
 - ``tel_visible``: a ``tel:`` link with the brief's digits is visible and on top inside the
   first 390 x 844 screen;
-- three screenshots: 390 x 844 first screen, full mobile page (height capped), 1280 x 800.
+- three screenshots: 390 x 844 first screen, full mobile page (height capped at 4000 px), 1280 x 800;
+  the full mobile page is also written as vertical parts of at most 390 x 1560 (``mobile_full_1`` ...,
+  at most 3), which is what the judge is shown: no part is tall enough for a vision model to shrink it.
 
 Environment:
 - ``JM_EXTRA_LIB_DIR``: extra shared-library directory for Chromium on hosts without its
@@ -32,6 +34,9 @@ from typing import Iterator, Optional
 MOBILE = {"width": 390, "height": 844}
 DESKTOP = {"width": 1280, "height": 800}
 FULL_PAGE_CAP = 4000
+# Judge image cap: 1560 px stays under the 1568 px long edge that vision APIs commonly downscale beyond,
+# so the text in each part stays legible. 4000 px of page -> at most 3 parts (1560 + 1560 + 880).
+FULL_PART_HEIGHT = 1560
 NAV_TIMEOUT_MS = 20000
 
 
@@ -318,6 +323,11 @@ def render_origin(origin: str, out_dir: str | os.PathLike, phone_digits: Optiona
             page.screenshot(path=str(full), full_page=True, clip={"x": 0, "y": 0, "width": MOBILE["width"], "height": h})
             res.screenshots["mobile_first"] = str(first)
             res.screenshots["mobile_full"] = str(full)
+            for i, y in enumerate(range(0, h, FULL_PART_HEIGHT), start=1):
+                part = out / f"mobile_full_{i}.png"
+                page.screenshot(path=str(part), full_page=True,
+                                clip={"x": 0, "y": y, "width": MOBILE["width"], "height": min(FULL_PART_HEIGHT, h - y)})
+                res.screenshots[f"mobile_full_{i}"] = str(part)
 
             vis = page.evaluate(_JS_HIDE_AND_READ)
             res.visible_text = vis["text"]

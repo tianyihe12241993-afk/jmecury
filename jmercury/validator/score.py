@@ -1,7 +1,7 @@
 """Local scorer: gates + measured quality per site, pairwise judging and task scores per round.
 
-    python -m jmercury.score --brief brief.json --site ./my-site/            # gates + measured
-    python -m jmercury.score --brief brief.json --site ./a/ --vs ./b/ --judge # plus one pairwise judgement
+    python -m jmercury.validator.score --brief brief.json --site ./my-site/            # gates + measured
+    python -m jmercury.validator.score --brief brief.json --site ./a/ --vs ./b/ --judge # plus one pairwise judgement
 
 Task score (DESIGN.md section 3.4):
     0                    if any gate fails, invented claims are confirmed in at least half of the site's pairs,
@@ -22,11 +22,11 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any, Optional
 
-from . import __version__
-from .brief import Brief
-from .bundle import Bundle, BundleRejected, pack_dir, unpack, write_files
+from .. import __version__
+from ..brief import Brief
+from ..bundle import Bundle, BundleRejected, pack_dir, unpack, write_files
 from .gates import GateResult, gate_facts, gate_no_reviews, gate_no_script, normalise_text
-from .judge import FakeJudge, Judge, JudgeConfigError, OpenAIJudge, SiteView, judge_pair  # noqa: F401 - re-export
+from .judge import FakeJudge, Judge, JudgeConfigError, OpenRouterJudge, SiteView, judge_pair  # noqa: F401 - re-export
 from .measure import WEIGHTS, MeasureUnavailable, measure
 from .render import render_origin, serve_dir
 
@@ -222,7 +222,7 @@ def score_round(brief: Brief, responses: dict[str, tuple[str, float]], judge: Op
         "scorer_version": __version__,
         "brief": json.loads(brief_json),
         "weights": {"task": {"M": W_MEASURED, "J": W_JUDGED}, "measured": WEIGHTS},
-        "judge": repr(judge) if judge is not None else None,
+        "judge": (judge.record() if hasattr(judge, "record") else repr(judge)) if judge is not None else None,
         "miners": per_uid,
         "pairs": pairs,
         "timing_s": round(time.monotonic() - t0, 3),
@@ -256,12 +256,12 @@ def load_site(path: str) -> str:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m jmercury.score", description="J Mercury local scorer.")
+    ap = argparse.ArgumentParser(prog="python -m jmercury.validator.score", description="J Mercury local scorer.")
     ap.add_argument("--brief", required=True, help="brief JSON file (python -m jmercury.brief --seed N > brief.json)")
     ap.add_argument("--site", required=True, help="site directory, .zip file or .b64 file")
     ap.add_argument("--vs", help="a second site to compare against (same formats as --site)")
     ap.add_argument("--judge", action="store_true",
-                    help="run one pairwise judgement (needs JM_JUDGE_BASE_URL, JM_JUDGE_MODEL, JM_JUDGE_API_KEY)")
+                    help="run one pairwise judgement through OpenRouter (needs OPENROUTER_API_KEY and JM_JUDGE_MODEL)")
     ap.add_argument("--runs", type=int, default=3, help="Lighthouse runs per site (median is used; default 3)")
     ap.add_argument("--no-measure", action="store_true", help="skip Lighthouse (gates and render checks only)")
     ap.add_argument("--out", help="directory for screenshots and the JSON record (default: a new temp directory)")
@@ -274,9 +274,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             print("error: --judge needs --vs (a pairwise judgement compares two sites)", file=sys.stderr)
             return 2
         try:
-            judge = OpenAIJudge()
+            judge = OpenRouterJudge()
         except JudgeConfigError as exc:
-            print(f"error: {exc}. Set them to an OpenAI-compatible endpoint, model name and API key.", file=sys.stderr)
+            print(f"error: {exc}.", file=sys.stderr)
             return 2
 
     brief = Brief.model_validate_json(Path(args.brief).read_text(encoding="utf-8"))

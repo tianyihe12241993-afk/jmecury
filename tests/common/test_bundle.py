@@ -9,7 +9,7 @@ import pytest
 
 from jmercury.bundle import MAX_FILES, BundleRejected, pack_dir, unpack, write_files
 
-from .conftest import EXAMPLE_DIR, zip_b64
+from ..conftest import EXAMPLE_DIR, zip_b64
 
 OK_HTML = "<!DOCTYPE html><title>x</title><p>hi</p>"
 

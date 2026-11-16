@@ -3,9 +3,9 @@ import json
 import pytest
 
 from jmercury.bundle import unpack
-from jmercury.gates import gate_facts, gate_no_reviews, time_pattern
+from jmercury.validator.gates import gate_facts, gate_no_reviews, time_pattern
 
-from .conftest import DAY_FULL, default_jsonld, facts_html, site_b64, visible_for
+from ..conftest import DAY_FULL, default_jsonld, facts_html, site_b64, visible_for
 
 
 def g3(brief, html, visible=None, fmt="24h"):
@@ -165,7 +165,7 @@ def test_jsonld_one_good_node_is_enough(brief42):
 
 
 def test_example_static_parts(example_brief, example_html):
-    from .conftest import EXAMPLE_DIR  # noqa: F401
+    from ..conftest import EXAMPLE_DIR  # noqa: F401
 
     r = gate_facts(example_brief, unpack(site_b64(example_html)), visible_for(example_brief, "h:mm AM"))
     assert r.passed, r.reasons

@@ -1,7 +1,7 @@
 import pytest
 
-from jmercury import measure
-from jmercury.measure import WEIGHTS, MeasureUnavailable, check_available, compute_m
+from jmercury.validator import measure
+from jmercury.validator.measure import WEIGHTS, MeasureUnavailable, check_available, compute_m
 
 
 def test_weights_match_design():

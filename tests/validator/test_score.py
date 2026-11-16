@@ -5,10 +5,10 @@ import sys
 import pytest
 
 from jmercury.bundle import pack_dir
-from jmercury.judge import FakeJudge, reply
-from jmercury.score import score_round, score_site
+from jmercury.validator.judge import FakeJudge, reply
+from jmercury.validator.score import score_round, score_site
 
-from .conftest import EXAMPLE_DIR, REPO, facts_html, site_b64
+from ..conftest import EXAMPLE_DIR, REPO, facts_html, site_b64
 
 pytestmark = pytest.mark.browser
 
@@ -106,18 +106,30 @@ def test_example_passes_all_gates(example_brief, tmp_path):
     assert res["render"]["no_hscroll"] and res["render"]["tel_visible"]
 
 
-def test_cli_judge_without_env_is_clear(tmp_path):
+def test_cli_judge_without_model_is_clear(tmp_path):
     env = {k: v for k, v in __import__("os").environ.items() if not k.startswith("JM_JUDGE_")}
-    out = subprocess.run([sys.executable, "-m", "jmercury.score", "--brief", str(EXAMPLE_DIR / "brief.json"),
+    env["OPENROUTER_API_KEY"] = "test-key-not-real"
+    out = subprocess.run([sys.executable, "-m", "jmercury.validator.score", "--brief", str(EXAMPLE_DIR / "brief.json"),
                           "--site", str(EXAMPLE_DIR / "site"), "--vs", str(EXAMPLE_DIR / "site"), "--judge"],
                          capture_output=True, text=True, cwd=REPO, env=env)
     assert out.returncode == 2
-    assert "JM_JUDGE_BASE_URL" in out.stderr and "JM_JUDGE_API_KEY" in out.stderr
+    assert "JM_JUDGE_MODEL is not set" in out.stderr and "no default judge model" in out.stderr
+    assert "test-key-not-real" not in out.stderr + out.stdout
+
+
+def test_cli_judge_without_key_is_clear(tmp_path):
+    env = {k: v for k, v in __import__("os").environ.items() if k != "OPENROUTER_API_KEY"}
+    env["JM_JUDGE_MODEL"] = "some/model"
+    out = subprocess.run([sys.executable, "-m", "jmercury.validator.score", "--brief", str(EXAMPLE_DIR / "brief.json"),
+                          "--site", str(EXAMPLE_DIR / "site"), "--vs", str(EXAMPLE_DIR / "site"), "--judge"],
+                         capture_output=True, text=True, cwd=REPO, env=env)
+    assert out.returncode == 2
+    assert "OPENROUTER_API_KEY is not set" in out.stderr
 
 
 @pytest.mark.lighthouse
 def test_cli_end_to_end_with_lighthouse(tmp_path):
-    out = subprocess.run([sys.executable, "-m", "jmercury.score", "--brief", str(EXAMPLE_DIR / "brief.json"),
+    out = subprocess.run([sys.executable, "-m", "jmercury.validator.score", "--brief", str(EXAMPLE_DIR / "brief.json"),
                           "--site", str(EXAMPLE_DIR / "site"), "--runs", "1", "--out", str(tmp_path)],
                          capture_output=True, text=True, cwd=REPO, timeout=600)
     assert out.returncode == 0, out.stderr[-2000:]

@@ -3,7 +3,7 @@
 ``unpack(bundle_b64)`` never writes outside memory; it returns the files as a dict
 name -> bytes, or raises ``BundleRejected`` with machine-readable reasons.
 ``write_files(files, dest)`` then materialises an accepted bundle in an empty directory.
-``pack_dir(path)`` is the miner-side helper that builds a deterministic bundle.
+``pack_dir(path)`` and ``pack_files(files)`` are the miner-side helpers that build a deterministic bundle.
 """
 
 from __future__ import annotations
@@ -261,12 +261,20 @@ def pack_dir(path: str | os.PathLike) -> str:
                 raise ValueError(f"only regular files are allowed in a bundle: {p}")
             entries.append((p.relative_to(root).as_posix(), p))
     entries.sort()
+    return pack_files({name: p.read_bytes() for name, p in entries})
+
+
+def pack_files(files: dict[str, bytes]) -> str:
+    """Zip in-memory files (name -> bytes) deterministically and return base64 (miner helper)."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-        for name, p in entries:
+        for name in sorted(files):
+            _, err = _check_name(name)
+            if err or name.endswith("/"):
+                raise ValueError(f"bad file name for a bundle: {name!r}")
             info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = (stat.S_IFREG | 0o644) << 16
             info.create_system = 3
-            zf.writestr(info, p.read_bytes())
+            zf.writestr(info, files[name])
     return base64.b64encode(buf.getvalue()).decode("ascii")

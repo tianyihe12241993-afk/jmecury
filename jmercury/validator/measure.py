@@ -23,7 +23,7 @@ from typing import Optional
 
 from .render import browser_env, chromium_executable
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 CATEGORIES = ("performance", "accessibility", "best-practices", "seo")
 WEIGHTS = {
     "performance": 0.20,

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import re
-import unicodedata
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, Iterable, Optional
@@ -18,8 +17,8 @@ from xml.etree import ElementTree as ET
 
 import html5lib
 
-from .brief import DAYS, Brief
-from .bundle import Bundle
+from ..brief import DAYS, PHONE_TOKEN, Brief, normalise_text, phone_digits, time_pattern  # noqa: F401 - re-exported
+from ..bundle import Bundle
 
 # --------------------------------------------------------------------------------------
 # Results
@@ -354,13 +353,6 @@ def _norm_ws(s: str) -> str:
     return " ".join(s.split())
 
 
-def phone_digits(s: str) -> str:
-    d = re.sub(r"\D", "", s)
-    if len(d) == 11 and d.startswith("1"):
-        d = d[1:]
-    return d
-
-
 def _norm_time(v: Any) -> Optional[str]:
     if not isinstance(v, str):
         return None
@@ -442,28 +434,6 @@ def check_business_node(brief: Brief, node: dict) -> list[str]:
 # Gate 3: facts are exact
 # --------------------------------------------------------------------------------------
 
-_PHONE_TOKEN = re.compile(r"(?<!\d)(?:\+?1[\s.\-]?)?(?:\(\d{3}\)|\d{3})[\s.\-]?\d{3}[\s.\-]?\d{4}(?!\d)")
-
-
-def time_pattern(hhmm: str) -> re.Pattern:
-    """Regex matching one brief time in any accepted format: 8:00 AM, 8am, 8 a.m., 08:00."""
-    h, m = int(hhmm[:2]), int(hhmm[3:])
-    h12 = h % 12 or 12
-    mer = "a" if h < 12 else "p"
-    mer_re = r"\s?(?:a\.?\s?m\.?)(?![a-z])" if mer == "a" else r"\s?(?:p\.?\s?m\.?)(?![a-z])"
-    alts = [rf"(?<![\d:]){h12}:{m:02d}{mer_re}"]
-    if m == 0:
-        alts.append(rf"(?<![\d:]){h12}{mer_re}")
-    # 24-hour clock, not followed by a meridiem (08:00, 8:00, 17:00)
-    h24 = rf"0?{h}" if h < 10 else f"{h}"
-    alts.append(rf"(?<![\d:]){h24}:{m:02d}(?!\d)(?!\s?[ap]\.?\s?m\b)")
-    return re.compile("|".join(f"(?:{a})" for a in alts), re.I)
-
-
-def normalise_text(s: str) -> str:
-    return " ".join(unicodedata.normalize("NFKC", s).casefold().split())
-
-
 def tel_links(index_html: str) -> list[str]:
     root = parse_html(index_html)
     out = []
@@ -486,7 +456,7 @@ def gate_facts(brief: Brief, bundle: Bundle, visible_text: Optional[str]) -> Gat
         if normalise_text(brief.name) not in vt:
             col.add("name_not_visible", brief.name)
         want = brief.phone_digits()
-        if not any(phone_digits(m.group(0)) == want for m in _PHONE_TOKEN.finditer(visible_text)):
+        if not any(phone_digits(m.group(0)) == want for m in PHONE_TOKEN.finditer(visible_text)):
             col.add("phone_not_visible", brief.phone)
         times = sorted({t for span in brief.hours.values() if span for t in span})
         for t in times:
