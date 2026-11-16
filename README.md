@@ -7,6 +7,8 @@ It grows out of [J Mercury](https://jmecury.org/), which builds and runs website
 plumbers, dentists, remodelers, med-spas and commercial contractors.
 
 - Design: [`docs/DESIGN.md`](docs/DESIGN.md) — the task, scoring, copy protection, roadmap, open questions.
+- Proposed second challenge: [`docs/DIAGNOSE.md`](docs/DIAGNOSE.md) — miners audit a business's current site,
+  listing and reviews; validators score them against problems they planted. Not implemented.
 - Judge rubric: [`docs/RUBRIC.md`](docs/RUBRIC.md) — what the LLM judge is asked, word for word in spirit.
 - Miner guide: [`docs/MINER.md`](docs/MINER.md). Validator guide: [`docs/VALIDATOR.md`](docs/VALIDATOR.md).
 
@@ -22,6 +24,7 @@ miners; `jmercury/miner/` the reference miner (generator and HTTP server).
       with a fake transport, and no judge model is chosen yet)
 - [x] Reference miner: one OpenRouter call per brief, deterministic fixes, self-check, signed HTTP server (tested
       with a fake LLM only)
+- [ ] Diagnose challenge (design proposal only: [`docs/DIAGNOSE.md`](docs/DIAGNOSE.md))
 - [ ] Chain wiring (metagraph, axon discovery, `set_weights`)
 - [ ] Testnet
 

@@ -3,6 +3,10 @@
 Status: **draft for discussion**. Nothing here is registered on chain yet. Numbers marked *(initial)* are starting
 values to be tuned on testnet, not promises.
 
+This document describes the **Build** challenge, the one that is implemented. A second challenge, **Diagnose**
+(auditing a business's current online presence against planted, known problems), is proposed in
+[`DIAGNOSE.md`](DIAGNOSE.md); it is not implemented.
+
 ## 1. What the subnet produces
 
 Local service businesses (landscapers, roofers, HVAC, plumbers, dentists, remodelers, med-spas, commercial
@@ -201,6 +205,8 @@ the bundle is allowed: the validator only sees the bundle.
   hours", "add a service") that check the change is made and nothing else breaks — that is the "ongoing care" part of
   the business; real customer briefs, only with the owner's consent and only facts the business already publishes,
   with the winning site reviewed by a person before delivery.
+- **Diagnose, as a second challenge** ([`DIAGNOSE.md`](DIAGNOSE.md)): an audit of a business's current site, listing
+  and reviews, scored against problems the validator planted.
 - **v3 — backend, as a separate challenge**: lead form to email, booking, review requests, each with its own
   measurable checks.
 
