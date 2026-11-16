@@ -4,6 +4,10 @@ The validator's judge model compares two sites, **A** and **B**, built for the s
 screenshots of each site (phone first screen 390 × 844, phone full page, desktop first screen 1280 × 800) and each
 page's visible text. It answers in a fixed JSON format; a reply that does not match the format counts as a tie.
 
+In the phone full-page screenshot, anything fixed to the screen (a sticky header or call bar) is drawn where it sits on
+the first screen, so it may appear over the middle of the page. The judge is told not to count that as overlapping
+content.
+
 The judge is told to picture **a homeowner or patient on a phone who has just heard the business name from a
 neighbour and looked it up.**
 
@@ -28,8 +32,9 @@ For each site the judge lists any claim **not supported by the brief**, includin
 - prices, discounts, guarantees, warranties, financing not in the brief;
 - staff names or credentials not in the brief.
 
-General, unverifiable wording ("friendly team", "quality work") is not an invented claim. A site whose invented-claims
-list is non-empty in both judging orders scores 0 for the task (see `DESIGN.md` §3.3).
+General, unverifiable wording ("friendly team", "quality work") is not an invented claim. A site's invented claims are
+*confirmed* in a pair when its list is non-empty in both judging orders; a site confirmed in at least half of its pairs
+scores 0 for the task (see `DESIGN.md` §3.3).
 
 ## Output format
 

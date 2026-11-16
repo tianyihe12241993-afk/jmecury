@@ -45,10 +45,12 @@ A zip bundle, base64 in the response:
 - `index.html` at the root (v1 is a single page), plus local CSS, images and fonts.
 - Limits *(initial)*: ≤ 2 MB zipped, ≤ 5 MB unzipped, ≤ 40 files. Allowed types: `.html .css .png .jpg .jpeg
   .webp .avif .svg .woff2 .ico .txt .xml`.
-- **No JavaScript** in v1: no `<script>`, no `on*=` attributes, no `javascript:` URLs, no `<iframe>/<object>/<embed>`,
-  no scripts or external references inside SVG. A local business page does not need JavaScript, and forbidding it
+- **No JavaScript** in v1: no `<script>` (the one exception is `<script type="application/ld+json">` for structured
+  data, with no `src`), no `on*=` attributes, no `javascript:` URLs, no `<iframe>/<object>/<embed>/<base>`, no meta
+  refresh, no scripts or external references inside SVG. A local business page does not need JavaScript, and forbidding it
   removes a whole class of tricks (detecting the validator's browser and showing it something else).
-- **No external resources**: every image, stylesheet and font must be inside the bundle. Ordinary links (`tel:`,
+- **No external resources**: every image, stylesheet and font must be inside the bundle. `data:` URLs count as
+  external (put the file in the bundle instead). Ordinary links (`tel:`,
   `mailto:`, `sms:`, an `https:` link to a map) are fine. Validators render with the network switched off.
 
 Timeout *(initial)*: 180 s per brief.
@@ -64,6 +66,7 @@ Each sampled miner's site goes through three layers. A site that fails any gate 
 3. **Facts are exact** — this is the promise J Mercury makes to its customers, so it is a gate, not a preference:
    - the business name and the phone number are in the visible text;
    - there is a `tel:` link with the brief's phone digits;
+   - "visible" means the rendered text at 390 px: text hidden with CSS does not count;
    - every opening and closing time in the brief appears in the visible text (accepted formats: `8:00 AM`, `8am`,
      `8 a.m.`, `08:00`);
    - a schema.org JSON-LD block of type `LocalBusiness` or a fitting subtype, whose `name`, `telephone` and
@@ -80,15 +83,19 @@ Rendered in headless Chromium, mobile viewport 390 × 844, network off, served b
 | Lighthouse mobile — Performance | 0.20 |
 | Lighthouse — Accessibility | 0.25 |
 | Lighthouse — Best Practices | 0.10 |
-| Lighthouse — SEO (on-page checks only: title, description, structured data, legible fonts, tap targets) | 0.15 |
-| No horizontal scrolling at 390 px | 0.10 |
-| A visible call link (`tel:`) inside the first 390 × 844 screen | 0.20 |
+| Lighthouse — SEO (on-page checks only, see the note below) | 0.15 |
+| No horizontal scrolling at 390 px (a page without a viewport meta tag fails this) | 0.10 |
+| A visible call link (`tel:`, with the brief's digits) inside the first 390 × 844 screen | 0.20 |
 
 `M` = weighted sum in [0, 1]. Lighthouse performance is noisy, so each site is measured 3 times and the median is
-used.
+used. Lighthouse 13.6 is pinned (Node.js ≥ 22.19).
 
-Note on "SEO": a round cannot measure real search ranking. What is measured is the on-page groundwork that ranking
-depends on. The design does not claim more than that.
+`M` is the groundwork, not the tie-breaker: a lean, well-built page reaches 1.0 (the example site in `examples/`
+does), so among good sites the judged part decides.
+
+Note on "SEO": a round cannot measure real search ranking. Lighthouse 13.6's SEO score covers crawlability, title,
+meta description, status code, link text, crawlable anchors, robots.txt, image alt text, hreflang and canonical; that
+on-page groundwork is all the design claims to measure. Structured data is checked by gate 3 instead.
 
 ### 3.3 Judged quality (LLM, pairwise)
 
@@ -98,11 +105,14 @@ All miners sampled in a round get **the same brief**. Every pair of gate-passing
   1280 × 800 desktop first-screen screenshot, and the page's visible text;
 - the rubric is public: [`RUBRIC.md`](RUBRIC.md). The judge prompt is the specification — miners should read it.
 - each pair is judged **twice with the order swapped**; a win counts only if both orders agree, otherwise it is a tie.
+  A judge reply that fails or does not match the format also counts as a tie.
 
-`J` = (wins + 0.5 × ties) / comparisons, in [0, 1].
+`J` = (wins + 0.5 × ties) / comparisons, in [0, 1]. A site that is the only one left to judge gets 0.5.
 
-**Invented claims**: if both orders flag a site for claims that are not in the brief (testimonials, star ratings,
-awards, prices, "since 1985", certifications, guarantees), the site scores **0** for the task. Real businesses get
+**Invented claims**: a claim not in the brief (testimonials, star ratings, awards, prices, "since 1985",
+certifications, guarantees) is *confirmed* in a pair when both orders flag it. A site whose invented claims are
+confirmed in **at least half of its pairs** scores **0** for the task. (One adverse pair out of seven is a single judge
+roll, not a finding; requiring half keeps the penalty for real fabrication without making honest sites gamble.) Real businesses get
 into trouble for invented reviews and credentials; the subnet must never teach miners that inventing them pays.
 
 All validators use **one fixed judge model** set in the validator config, so their weights can agree. Which model is
@@ -122,7 +132,8 @@ proportional to it. Miners not sampled in a round keep their average.
 
 - Briefs are generated fresh each round, per validator, from a random seed; there is nothing to look up.
 - **Duplicates within a round**: if two miners return sites with the same normalised visible text, only the earliest
-  response keeps its score; the others score 0.
+  response keeps its score; the others score 0. This is on purpose even when only the images differ: every miner in a
+  round gets the same brief, and identical wording means the text was shared.
 - Near-duplicate detection (same structure, small text edits) is planned for v2 once there is real data on what
   honest diversity looks like.
 
@@ -136,6 +147,12 @@ proportional to it. Miners not sampled in a round keep their average.
 6. Write a round record (brief, bundle hashes, every gate result, measured parts, every judge verdict) so anyone can
    see why a score was given.
 
+### Transport
+
+bittensor 11 has no axon, dendrite or synapse. Miners run their own small HTTP endpoint and publish it on chain with
+the `ServeAxon` intent; the validator POSTs the brief as JSON (`jmercury/protocol.py`), and every request and answer is
+signed and checked with `bittensor.http_auth`.
+
 ## 6. Running the scorer without the chain
 
 The repository ships a local scorer, so miners can test before mining:
@@ -148,8 +165,9 @@ python -m jmercury.brief --seed 42 > brief.json                         # a samp
 
 ## 7. What validators need
 
-Python 3.10+, Chromium (via Playwright), Node.js with Lighthouse, Docker recommended for isolated rendering, and an
-API key for the judge model. No GPU.
+Python 3.10+, Chromium (via Playwright) with its system libraries and fonts, Node.js ≥ 22.19 with Lighthouse 13.6
+(`npm ci`), Docker recommended for isolated rendering, and an API key for the judge model. No GPU. Scoring one site
+(render + 3 Lighthouse runs) takes about 30 s, almost all of it Lighthouse.
 
 ## 8. Known limits of v1
 
@@ -157,6 +175,10 @@ API key for the judge model. No GPU.
   exact one, and the judge rubric also asks about fact consistency.
 - Single page only; photos are whatever the miner puts in the bundle.
 - An LLM judge has noise. Its repeat-agreement is measured before the weights above are fixed.
+- Hidden-text checks cover the common CSS tricks (display, visibility, zero size, clipping, off-screen, …); text in
+  the same colour as its background is not detected by the gate and is left to the judge.
+- The full-page phone screenshot draws bars fixed to the screen (for example a sticky call bar) where they sit on the
+  first screen, so they can appear over the middle of the image; the judge is told this.
 
 ## 9. Roadmap (subject to discussion)
 

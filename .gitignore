@@ -11,3 +11,6 @@ runs/
 out/
 .pytest_cache/
 STATE.md
+
+# machine-local environment (fonts and libraries for Chromium)
+.local/

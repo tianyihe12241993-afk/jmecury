@@ -1,0 +1,9 @@
+{
+  "name": "jmercury-scorer-tools",
+  "private": true,
+  "description": "Node tooling for the J Mercury local scorer (Lighthouse).",
+  "license": "MIT",
+  "devDependencies": {
+    "lighthouse": "13.6.0"
+  }
+}

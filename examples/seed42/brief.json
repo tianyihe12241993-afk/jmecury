@@ -1,0 +1,80 @@
+{
+  "task_id": "548321f8f11c1788",
+  "trade": "hvac",
+  "name": "Copperleaf Heating & Air",
+  "city": "Nashville",
+  "state": "TN",
+  "service_area": [
+    "Mount Juliet",
+    "Gallatin",
+    "Franklin",
+    "Hendersonville",
+    "Murfreesboro",
+    "Brentwood"
+  ],
+  "phone": "(615) 555-0127",
+  "email": "office@copperleafheating.example",
+  "address": null,
+  "hours": {
+    "mon": [
+      "07:00",
+      "17:00"
+    ],
+    "tue": [
+      "07:00",
+      "17:00"
+    ],
+    "wed": [
+      "07:00",
+      "17:00"
+    ],
+    "thu": [
+      "07:00",
+      "17:00"
+    ],
+    "fri": [
+      "07:00",
+      "17:00"
+    ],
+    "sat": [
+      "09:00",
+      "14:00"
+    ],
+    "sun": null
+  },
+  "services": [
+    {
+      "name": "Maintenance plans",
+      "detail": "Two visits a year with priority scheduling for plan members."
+    },
+    {
+      "name": "Heat pump service",
+      "detail": "Install, repair and seasonal checks for heat pumps."
+    },
+    {
+      "name": "Ductless mini-splits",
+      "detail": "Ductless systems for additions, garages and sunrooms."
+    },
+    {
+      "name": "Furnace repair",
+      "detail": "Gas and electric furnace repair."
+    },
+    {
+      "name": "AC installation",
+      "detail": "New central air systems sized to the home."
+    }
+  ],
+  "facts": {
+    "founded": 1985,
+    "license": "TN-HV-42243",
+    "emergency": true,
+    "insured": true
+  },
+  "owner_notes": "A lot of our calls come from Mount Juliet and Gallatin. I want people to see right away that we do maintenance plans.",
+  "required": [
+    "call",
+    "services",
+    "area",
+    "hours"
+  ]
+}

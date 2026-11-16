@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jmercury"
+version = "0.1.0"
+description = "J Mercury subnet: local scorer for phone-first local-business websites"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.6",
+    "html5lib>=1.1",
+    # 1.63.0 uses Chromium build 1243; pin so validators render with the same browser.
+    "playwright==1.63.0",
+    # Only jmercury/protocol.py imports bittensor.
+    "bittensor==11.3.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools]
+packages = ["jmercury"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "browser: needs Playwright Chromium",
+    "lighthouse: needs node and the local Lighthouse install",
+]
