@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+*.key
+node_modules/
+runs/
+out/
+.pytest_cache/
+STATE.md
